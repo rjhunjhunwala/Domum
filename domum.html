@@ -1,0 +1,410 @@
+<h1>
+    Housing Spreadsheet
+</h1>
+
+This is a simple standalone web that will help you to think through different homebuying scenarios.
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>Housing calculator</title>
+    <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+</head>
+
+<body>
+<div id="myGrid" style="height: 500px; width:2000px;" class="ag-theme-alpine"></div>
+</body>
+
+</html>
+<script>
+    var inputRow = {};
+
+    class RowEditComponent {
+        constructor() {
+            this.isNew = true;
+        }
+
+        init(params) {
+            this.params = params;
+
+            this.eGui = document.createElement('div');
+
+
+            this.deleteButton = document.createElement('button');
+            this.deleteButton.innerHTML = 'delete';
+            this.deleteButton.addEventListener('click', this.onDeleteClick.bind(this));
+
+            this.updateButton = document.createElement('button');
+            this.updateButton.innerHTML = 'update';
+            this.updateButton.addEventListener('click', this.onUpdateClick.bind(this));
+
+            this.cancelButton = document.createElement('button');
+            this.cancelButton.innerHTML = 'cancel';
+            this.cancelButton.addEventListener('click', this.onCancelClick.bind(this));
+
+            this.optimizeButton = document.createElement('button');
+            this.optimizeButton.innerHTML = 'Optimize';
+            this.optimizeButton.addEventListener('click', () => {
+                var evil_st = prompt("(x,y,y*)");
+                var tup = eval(evil_st);
+                var x_col = tup[0];
+                var y_col = tup[1];
+                var y_star = tup[2];
+                function to_zero(x){
+                    var copyRowData = JSON.parse(JSON.stringify(rowData[0]));
+                    copyRowData[x_col] = x;
+                    var outRow = calculateNonEditableFields(copyRowData);
+                    return outRow[y_col] - y_star;
+                };
+
+                rowData[this.params.node.rowIndex][x_col] = univariate_zero(to_zero, rowData[this.params.node.rowIndex][x_col]);
+                rowData[this.params.node.rowIndex] = calculateNonEditableFields(rowData[this.params.node.rowIndex]);
+                setRowData([...rowData]);
+
+            });
+
+
+            this.eGui.appendChild(this.deleteButton);
+            this.eGui.appendChild(this.optimizeButton);
+
+            this.onCancel = this.onCancelClick.bind(this);
+        }
+
+        getGui() {
+            return this.eGui;
+        }
+
+        invokeParentMethod() {
+            this.params.context.componentParent.methodFromParent(
+                `Row: ${this.params.node.rowIndex}, Col: ${this.params.colDef.headerName}`
+            );
+        }
+
+        refresh() {
+            return false;
+        }
+
+        onEditClick() {
+            let renderers = this.params.api.getCellRendererInstances();
+            renderers.forEach(renderer => {
+                if (!renderer.isNew) renderer.onCancel();
+            });
+            this.isNew = false;
+            this.previousData = JSON.parse(JSON.stringify(this.params.node.data));
+            let cols = this.params.columnApi.getAllGridColumns();
+            let firstCol = {
+                colId: '',
+            };
+            if (cols) {
+                firstCol = cols[0];
+            }
+            let rowIndex = this.params.node.rowIndex;
+            this.params.api.setFocusedCell(rowIndex, firstCol.colId);
+            this.params.api.startEditingCell({
+                rowIndex: rowIndex,
+                colKey: 'athlete',
+            });
+
+
+            this.editCleanUp.call(this);
+        }
+
+        onUpdateClick() {
+            this.isNew = true;
+            let obj = {};
+            obj.type = 'update';
+            this.params.api.stopEditing();
+            obj.selectedData = [this.params.data];
+            this.updateAndCancelCleanUp.call(this);
+        }
+
+        onCancelClick() {
+            this.isNew = true;
+            this.params.node.setData(this.previousData);
+            this.params.api.stopEditing(true);
+            this.updateAndCancelCleanUp.call(this);
+        }
+
+        onDeleteClick() {
+            const selectedData = [this.params.node.data];
+            this.params.api.applyTransaction({remove: selectedData});
+            var out = [];
+            gridOptions.api.forEachNode((node, index) => out.push(node.data));
+            rowData = out;
+        }
+
+        updateAndCancelCleanUp() {
+            this.eGui.removeChild(this.updateButton);
+            this.eGui.removeChild(this.cancelButton);
+            this.eGui.appendChild(this.deleteButton);
+        }
+
+        editCleanUp() {
+            this.eGui.appendChild(this.updateButton);
+            this.eGui.appendChild(this.cancelButton);
+            this.eGui.removeChild(this.deleteButton);
+        }
+    }
+
+
+    function setRowData(newData) {
+        rowData = newData;
+        gridOptions.api.setRowData(rowData);
+    }
+
+    function setInputRow(newData) {
+        inputRow = newData;
+        gridOptions.api.setPinnedTopRowData([inputRow]);
+    }
+
+    function isEmptyPinnedCell({node, value}) {
+        return (
+            (node.rowPinned === 'top' && value == null) ||
+            (node.rowPinned === 'top' && value == '')
+        );
+    }
+
+    function createPinnedCellPlaceholder({colDef}) {
+        return colDef.field[0].toUpperCase() + colDef.field.slice(1) + '...';
+    }
+
+    function isPinnedRowDataCompleted(params) {
+        return columnDefs.every((def) => def.field == "delete" || !def.editable || inputRow[def.field]);
+    }
+
+    const CLOSING_COSTS = .02;
+    const broker_fee_one_side = .0275;
+
+    const address = "Address";
+    const price = "Price";
+    const years = "Term years";
+    const down = "Down Payment%";
+    const rate = "Interest Rate";
+    const loan_principal = "Loan principal";
+    const paymentToBank = "Principal and interest";
+    const taxes = "Property taxes";
+    const hoa = "HOA fees";
+    const insurance = "Insurance";
+    const maintainence = "Maintainence";
+    const rent_equivalent_mortgage = "Rent Equivalent Mortgage costs";
+    const fair_market_rent = "Fair Market rent Estimate";
+    const return_rate = "Equivalent return rate";
+    const appreciation_expected_percent = "Expected percent appreciation";
+    const expected_sales_price = "Expected sales price";
+    const expected_proceeds = "Expected sales proceeds";
+    const cash_needed_to_close = "Cash needed to close";
+    const initial_interest = "Initial Interest";
+    const monthly_payment = "Total Monthly Payment";
+
+    function compute_loan_principal(price, down) {
+        var fraction = (100 - down) / 100.0;
+        var principal = price * fraction;
+        return principal;
+    }
+
+    function compute_pni(principal, years, interest_rate) {
+        var periods = years * MONTHS_PER_YEAR;
+        var interest_per_period = interest_rate / MONTHS_PER_YEAR / 100.0;
+        return (principal * interest_per_period) / (1 - Math.pow((1 + interest_per_period), (-periods)));
+
+    }
+
+    function compute_maintainence(taxes, hoa, insurance) {
+        return taxes / 12 + hoa + insurance / 12;
+    }
+
+    function compute_total_payment(maintainence, payment_to_bank) {
+        return maintainence + payment_to_bank;
+    }
+
+    function compute_initial_interest(interest_rate, principal) {
+        return interest_rate * 1 / 100 * principal / 12;
+    }
+
+    function compute_rent_equivalent_mortgage(interest, maintainence) {
+        return interest + maintainence;
+
+    }
+
+    function compute_cash_needed_to_close(price, down) {
+        return price * (down / 100 + CLOSING_COSTS);
+    }
+
+    function compute_expected_sales_price(price, appreciation_expected_percent, years) {
+        return price * ((1 + appreciation_expected_percent / 100) ** years);
+    }
+
+    function private_univariate_zero(real_to_real_continuous_semimonotonic_function, guess) {
+        // Looks for a zero assuming one exists with the same sign as the guess.
+        var low = guess;
+        var high = guess;
+        var low_val = real_to_real_continuous_semimonotonic_function(low);
+        var high_val = real_to_real_continuous_semimonotonic_function(high);
+        var count = 0;
+        let MAX_ITERATIONS = 16;
+        while (count < MAX_ITERATIONS && (Math.sign(low_val) == Math.sign(high_val))) {
+            count += 1;
+            if (Math.sign(low_val) == 0) {
+                return low;
+            }
+            if (Math.sign(high_val) == 0) {
+                return high;
+            }
+            low = low / 2;
+            high = high * 2;
+            low_val = real_to_real_continuous_semimonotonic_function(low);
+            high_val = real_to_real_continuous_semimonotonic_function(high);
+        }
+
+        if (count >= MAX_ITERATIONS) {
+            return undefined;
+        }
+
+        var f = real_to_real_continuous_semimonotonic_function;
+
+        var iterations = 40;
+
+        while (iterations-- > 0) {
+            var guess = (low + high) / 2;
+            var sgn = Math.sign(f(guess));
+            if (sgn == 0) {
+                return guess;
+            }
+            if (sgn == Math.sign(f(low))) {
+                low = guess;
+            } else {
+                // guess has same sign as high
+                high = guess;
+            }
+
+        }
+
+        return (low + high) / 2
+
+    }
+
+    function univariate_zero(f, guess) {
+
+        var rightSign = private_univariate_zero(f, guess);
+        if (isFinite(rightSign)) {
+            return rightSign;
+        }
+        var wrongSign = private_univariate_zero(f, guess);
+
+        if (isFinite(wrongSign)) {
+            return wrongSign;
+        }
+
+        if (Math.abs(f(0)) <= .0001) {
+            return 0;
+        }
+        return undefined;
+    }
+
+    function compute_return_rate(cash, monthly, years_term, fair, proceeds) {
+        years_term = parseFloat(years_term);
+
+        function get_effective_discounted_value(discount_rate) {
+            discount_rate = discount_rate / 12;
+            return cash * (1 + discount_rate) ** (12.0 * years_term) + (monthly - fair) * (1 - (1 + discount_rate) ** (12.0 * years_term)) / (1 - (1 + discount_rate)) - proceeds;
+        }
+
+        return univariate_zero(get_effective_discounted_value, .05) * 100;
+    }
+
+    function compute_proceeds(sales_price) {
+        return sales_price * (1 - 2 * broker_fee_one_side);
+    }
+
+    const graph = {};
+    graph[paymentToBank] = [[loan_principal, years, rate], compute_pni];
+    graph[maintainence] = [[taxes, hoa, insurance], compute_maintainence];
+    graph[monthly_payment] = [[paymentToBank, maintainence], compute_total_payment];
+    graph[rent_equivalent_mortgage] = [[initial_interest, maintainence], compute_rent_equivalent_mortgage];
+    graph[initial_interest] = [[rate, loan_principal], compute_initial_interest];
+    graph[loan_principal] = [[price, down], compute_loan_principal];
+    graph[cash_needed_to_close] = [[price, down], compute_cash_needed_to_close];
+    graph[expected_sales_price] = [[price, appreciation_expected_percent, years], compute_expected_sales_price];
+    graph[return_rate] = [[cash_needed_to_close, monthly_payment, years, fair_market_rent, expected_proceeds], compute_return_rate];
+    graph[expected_proceeds] = [[expected_sales_price], compute_proceeds];
+
+
+    function getObject(field) {
+        var out = {};
+        out["field"] = field;
+        out["editable"] = !(field in graph);
+        return out;
+    }
+
+    const columnDefs = [{
+        field: 'delete',
+        minWidth: 150,
+        cellRenderer: RowEditComponent,
+        editable: false
+    }, ...[address, price, years, down, rate, hoa, taxes, insurance, appreciation_expected_percent, fair_market_rent, cash_needed_to_close, paymentToBank,
+        loan_principal, maintainence, initial_interest, rent_equivalent_mortgage, monthly_payment, expected_sales_price, expected_proceeds, return_rate].map(field => getObject(field))];
+
+
+    var MONTHS_PER_YEAR = 12.0;
+
+
+    function calculateNonEditableFields(inRow) {
+
+        function compute(key) {
+            if (!(key in graph)) {
+                return parseFloat(inRow[key]);
+            }
+            var dependencies = graph[key][0];
+            var calc = graph[key][1];
+            var args = dependencies.map(compute);
+            inRow[key] = parseFloat(calc(...args));
+            return parseFloat(inRow[key]);
+
+        }
+
+
+        for (var key in graph) {
+            inRow[key] = compute(key);
+        }
+        return inRow;
+    }
+
+    // specify the data
+    var rowData = [];
+
+    // let the grid know which columns and what data to use
+    const gridOptions = {
+        columnDefs: columnDefs,
+        rowData: rowData,
+        editType: "fullRow",
+        pinnedTopRowData: [inputRow],
+        valueFormatter: (params) =>
+            isEmptyPinnedCell(params)
+                ? createPinnedCellPlaceholder(params)
+                : undefined,
+        getRowStyle: ({node}) =>
+            node.rowPinned ? {'font-weight': 'bold', 'font-style': 'italic'} : 0,
+        onCellEditingStopped: (params) => {
+            for (var row in rowData) {
+                rowData[row] = calculateNonEditableFields(rowData[row]);
+                setRowData([...rowData]);
+            }
+
+            if (isPinnedRowDataCompleted()) {
+                inputRow = calculateNonEditableFields(inputRow);
+                // save data
+                setRowData([...rowData, inputRow]);
+                //reset pinned row
+                setInputRow({});
+            }
+        },
+    };
+
+    // setup the grid after the page has finished loading
+    document.addEventListener('DOMContentLoaded', () => {
+        const gridDiv = document.querySelector('#myGrid');
+        new agGrid.Grid(gridDiv, gridOptions);
+    });
+
+
+</script>
