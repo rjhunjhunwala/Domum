@@ -3,6 +3,106 @@
 </h1>
 
 This is a simple standalone web that will help you to think through different homebuying scenarios.
+It helps model the implications of financing a home with a given fixed rate mortgage and selling the home at the end of the period.
+
+<h2>
+    Definitions
+</h2>
+
+<ul>
+    <li>
+        Address - The address of the proposed purchase
+    </li>
+    <li>
+        Price - The proposed purchase price of the home
+    </li>
+    <li>
+        Term years - The number of years in the fixed rate mortgage
+    </li>
+    <li>
+        Interest Rate - The interest rate in percent. Enter 5: for example for a 5%
+    </li>
+    <li>
+        Property Taxes - Annual Property taxes
+    </li>
+    <li>
+        HOA Fees - Monthly HOA fees
+    </li>
+    <li>
+        Insurance - Yearly homeowners insurance policy
+    </li>
+    <li>
+        Fair Market Rent Estimate - An estimate of a fair rent on the open market for the apartment.
+    </li>
+    <li>
+        Expected appreciation Percent - The percent of annual appreciation you would like to model for for the
+        apartment.
+        The trailing 25 year average appreciation is 3.8%
+    </li>
+    <li>
+        Cash needed to close - The down payment and closing costs on the house
+    </li>
+    <li>
+        Loan principal - The intial loan principal
+    </li>
+    <li>
+        Principal and interest - The monthly expenses on the mortgage from principal and interest
+    </li>
+
+    <li>
+        Total Monthly Payment - Full monthly payment including principal, interest, hoa, taxes, and insurance
+    </li>
+    <li>
+        Initial interest - interest payment first month.
+    </li>
+    <li>
+        Rent Equivalent Mortgage - The portion of the initial monthly mortgage payment which does not build equity.
+    </li>
+    <li>
+        Expected Sales Price - The sales price factoring appreciation at the end of the mortgage period
+    </li>
+    <li>
+        Expected Sales proceed - The cash pulled out of the house from the sale after realtor fees.
+    </li>
+    <li>
+        Equivalent return rate - The breakeven rate of fixed return. If you can deposit money at a better
+        risk adjusted long-term rate then this, you should consider alternate investments.
+    </li>
+
+</ul>
+
+<h2>
+    Optimizer
+</h2>
+
+If you have a fixed budget or you want to tweak the numbers to see what would need to change to meet certain financial goals
+try out the optimizer. The optimizer uses the <a href="https://en.wikipedia.org/wiki/Bisection_method" class="hack">bisect method</a> to find some input which meets a certain goal. For example, say you have 100,000$ and you want to figure out how much you can spend on a house,
+the optimizer will help you scope your budget.
+
+
+<!--
+    const address = "Address";
+    const price = "Price";
+    const years = "Term years";
+    const down = "Down Payment%";
+    const rate = "Interest Rate";
+    const loan_principal = "Loan principal";
+    const paymentToBank = "Principal and interest";
+    const taxes = "Property taxes";
+    const hoa = "HOA fees";
+    const insurance = "Insurance";
+    const maintainence = "Maintainence";
+    const rent_equivalent_mortgage = "Rent Equivalent Mortgage costs";
+    const fair_market_rent = "Fair Market rent Estimate";
+    const return_rate = "Equivalent return rate";
+    const appreciation_expected_percent = "Expected percent appreciation";
+    const expected_sales_price = "Expected sales price";
+    const expected_proceeds = "Expected sales proceeds";
+    const cash_needed_to_close = "Cash needed to close";
+    const initial_interest = "Initial Interest";
+    const monthly_payment = "Total Monthly Payment";
+-->
+
 
 <!DOCTYPE html>
 <html lang="en">
@@ -16,7 +116,79 @@ This is a simple standalone web that will help you to think through different ho
 </body>
 
 </html>
+
 <script>
+    function showDialogBox(listA, listB, index) {
+        const dialogBox = document.createElement('div');
+        dialogBox.style.position = 'fixed';
+        dialogBox.style.top = '0';
+        dialogBox.style.left = '0';
+        dialogBox.style.width = '100%';
+        dialogBox.style.height = '100%';
+        dialogBox.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        dialogBox.style.display = 'flex';
+        dialogBox.style.alignItems = 'center';
+        dialogBox.style.justifyContent = 'center';
+        document.body.appendChild(dialogBox);
+
+        const form = document.createElement('form');
+        form.style.width = '400px';
+        form.style.backgroundColor = '#000';
+        form.style.padding = '20px';
+        dialogBox.appendChild(form);
+
+        const selectA = document.createElement('select');
+        const selectB = document.createElement('select');
+        const inputNumber = document.createElement('input');
+
+        listA.forEach(item => {
+            const option = document.createElement('option');
+            option.text = item;
+            selectA.add(option);
+        });
+
+        listB.forEach(item => {
+            const option = document.createElement('option');
+            option.text = item;
+            selectB.add(option);
+        });
+        form.style.color = "#fff"
+
+        form.appendChild(document.createTextNode('I am flexible on: '));
+        form.appendChild(selectA);
+        form.appendChild(document.createTextNode(' if it means making '));
+        form.appendChild(selectB);
+        form.appendChild(document.createTextNode(' equal '));
+        form.appendChild(inputNumber);
+
+        const submitButton = document.createElement('button');
+        submitButton.type = 'submit';
+        submitButton.innerHTML = 'Submit';
+        form.appendChild(submitButton);
+
+        form.addEventListener('submit', event => {
+            event.preventDefault();
+            const selectedA = selectA.options[selectA.selectedIndex].text;
+            const selectedB = selectB.options[selectB.selectedIndex].text;
+            const inputVal = inputNumber.value;
+            var x_col = selectedA;
+            var y_col = selectedB;
+            var y_star = inputVal;
+
+            function to_zero(x) {
+                var copyRowData = JSON.parse(JSON.stringify(rowData[0]));
+                copyRowData[x_col] = x;
+                var outRow = calculateNonEditableFields(copyRowData);
+                return outRow[y_col] - y_star;
+            };
+
+            rowData[index][x_col] = univariate_zero(to_zero, rowData[index][x_col]);
+            rowData[index] = calculateNonEditableFields(rowData[index]);
+            setRowData([...rowData]);
+            dialogBox.remove();
+        });
+    }
+
     var inputRow = {};
 
     class RowEditComponent {
@@ -45,21 +217,9 @@ This is a simple standalone web that will help you to think through different ho
             this.optimizeButton = document.createElement('button');
             this.optimizeButton.innerHTML = 'Optimize';
             this.optimizeButton.addEventListener('click', () => {
-                var evil_st = prompt("(x,y,y*)");
-                var tup = eval(evil_st);
-                var x_col = tup[0];
-                var y_col = tup[1];
-                var y_star = tup[2];
-                function to_zero(x){
-                    var copyRowData = JSON.parse(JSON.stringify(rowData[0]));
-                    copyRowData[x_col] = x;
-                    var outRow = calculateNonEditableFields(copyRowData);
-                    return outRow[y_col] - y_star;
-                };
-
-                rowData[this.params.node.rowIndex][x_col] = univariate_zero(to_zero, rowData[this.params.node.rowIndex][x_col]);
-                rowData[this.params.node.rowIndex] = calculateNonEditableFields(rowData[this.params.node.rowIndex]);
-                setRowData([...rowData]);
+                var editable = columnDefs.filter(a => a.field != "delete" && a.field != address && a.editable).map(a => a.field);
+                var outputs = columnDefs.filter(a => a.field != "delete" && !a.editable).map(a => a.field);
+                showDialogBox(editable, outputs, this.params.node.rowIndex);
 
             });
 
@@ -186,9 +346,9 @@ This is a simple standalone web that will help you to think through different ho
     const hoa = "HOA fees";
     const insurance = "Insurance";
     const maintainence = "Maintainence";
-    const rent_equivalent_mortgage = "Rent Equivalent Mortgage costs";
-    const fair_market_rent = "Fair Market rent Estimate";
-    const return_rate = "Equivalent return rate";
+    const rent_equivalent_mortgage = "Rent Equivalent Mortgage Costs";
+    const fair_market_rent = "Fair Market Rent Estimate";
+    const return_rate = "Equivalent Return Rate";
     const appreciation_expected_percent = "Expected percent appreciation";
     const expected_sales_price = "Expected sales price";
     const expected_proceeds = "Expected sales proceeds";
